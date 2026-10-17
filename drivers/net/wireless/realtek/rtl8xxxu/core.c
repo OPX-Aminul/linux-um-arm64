@@ -7744,6 +7744,16 @@ static int rtl8xxxu_probe(struct usb_interface *interface,
 	int ret;
 	int untested = 1;
 
+	/*
+	 * Leave the RTL8188EU to rtl8188eus where that is built: it does
+	 * monitor mode and injection on this chip, and this driver does
+	 * not. -ENODEV makes the USB core offer the device to the next
+	 * driver that matches it.
+	 */
+	if (IS_ENABLED(CONFIG_RTL8188EUS) &&
+	    id->driver_info == (unsigned long)&rtl8188eu_fops)
+		return -ENODEV;
+
 	udev = interface_to_usbdev(interface);
 
 	switch (id->idVendor) {
