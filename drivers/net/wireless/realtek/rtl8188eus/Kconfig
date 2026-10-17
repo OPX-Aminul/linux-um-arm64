@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0
+config RTL8188EUS
+	tristate "Realtek RTL8188EUS USB (aircrack-ng driver, monitor mode and injection)"
+	depends on CFG80211 && USB
+	select WIRELESS_EXT
+	select WEXT_PRIV
+	help
+	  Realtek's own driver for the RTL8188EUS / RTL8188ETV, as carried by
+	  aircrack-ng (github.com/aircrack-ng/rtl8188eus). This is the chip
+	  in the TP-Link TL-WN722N v2 and v3.
+
+	  rtl8xxxu also claims this chip, but it only associates: it does
+	  not set the chip up for monitor mode beyond mac80211's filter
+	  flags and has no transmit path for injected frames. This driver
+	  does both. With it enabled, rtl8xxxu leaves the RTL8188EU alone.

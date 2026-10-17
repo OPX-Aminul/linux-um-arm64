@@ -4147,7 +4147,7 @@ bool rtw_wowlan_parser_pattern_cmd(u8 *input, char *pattern,
 		} else {
 			u8 hex;
 
-			strncpy(member, input, len);
+			rtw_strncpy(member, input, len);
 			if (!rtw_check_pattern_valid(member, sizeof(member))) {
 				RTW_INFO("%s:[ERROR] pattern is invalid!!\n",
 					 __func__);

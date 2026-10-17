@@ -3096,7 +3096,7 @@ static int rtw_wx_set_enc_ext(struct net_device *dev,
 		goto exit;
 	}
 
-	strncpy((char *)param->u.crypt.alg, alg_name, IEEE_CRYPT_ALG_NAME_LEN);
+	rtw_strncpy((char *)param->u.crypt.alg, alg_name, IEEE_CRYPT_ALG_NAME_LEN);
 
 	if (pext->ext_flags & IW_ENCODE_EXT_SET_TX_KEY)
 		param->u.crypt.set_tx = 1;
@@ -5835,7 +5835,7 @@ static int rtw_rereg_nd_name(struct net_device *dev,
 #endif
 			reg_ifname = padapter->registrypriv.if2name;
 
-		strncpy(rereg_priv->old_ifname, reg_ifname, IFNAMSIZ);
+		rtw_strncpy(rereg_priv->old_ifname, reg_ifname, IFNAMSIZ);
 		rereg_priv->old_ifname[IFNAMSIZ - 1] = 0;
 	}
 
@@ -5860,7 +5860,7 @@ static int rtw_rereg_nd_name(struct net_device *dev,
 		/* rtw_ips_mode_req(&padapter->pwrctrlpriv, rereg_priv->old_ips_mode); */
 	}
 
-	strncpy(rereg_priv->old_ifname, new_ifname, IFNAMSIZ);
+	rtw_strncpy(rereg_priv->old_ifname, new_ifname, IFNAMSIZ);
 	rereg_priv->old_ifname[IFNAMSIZ - 1] = 0;
 
 	if (_rtw_memcmp(new_ifname, "disable%d", 9) == _TRUE) {
@@ -9789,7 +9789,11 @@ static int rtw_mp_efuse_set(struct net_device *dev,
 		rtw_hal_read_chip_info(padapter);
 		/* set mac addr*/
 		rtw_macaddr_cfg(adapter_mac_addr(padapter), get_hal_mac_addr(padapter));
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
+		eth_hw_addr_set(padapter->pnetdev, get_hal_mac_addr(padapter)); /* set mac addr to net_device */
+#else
 		_rtw_memcpy((void *)padapter->pnetdev->dev_addr, get_hal_mac_addr(padapter), ETH_ALEN); /* set mac addr to net_device */
+#endif
 
 #ifdef CONFIG_P2P
 		rtw_init_wifidirect_addrs(padapter, adapter_mac_addr(padapter), adapter_mac_addr(padapter));
