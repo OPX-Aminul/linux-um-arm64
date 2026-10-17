@@ -254,8 +254,21 @@ void __wrap_free(void *ptr)
 	 */
 
 	if ((addr >= uml_physmem) && (addr < high_physmem)) {
-		if (kmalloc_ok)
-			kfree(ptr);
+		/*
+		 * Not everything in physical memory came from kmalloc. Host
+		 * libc can serve allocations made before kmalloc_ok from the
+		 * brk heap just past the kernel image, and that is inside
+		 * physical memory too -- reserved, so the page allocator never
+		 * hands it out, which is how such a pointer is told apart.
+		 * kfree() on one corrupts the kernel heap. The check is only
+		 * made here, where virt_to_page() is valid for the address.
+		 */
+		if (kmalloc_ok) {
+			if (reserved_address(ptr))
+				__real_free(ptr);
+			else
+				kfree(ptr);
+		}
 	}
 	else if ((addr >= start_vm) && (addr < end_vm)) {
 		if (kmalloc_ok)

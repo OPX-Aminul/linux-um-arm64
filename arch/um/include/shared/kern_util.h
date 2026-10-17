@@ -67,4 +67,6 @@ void um_idle_sleep(void);
 
 void kasan_map_memory(void *start, size_t len);
 
+extern int reserved_address(void *addr);
+
 #endif

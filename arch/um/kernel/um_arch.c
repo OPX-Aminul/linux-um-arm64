@@ -624,3 +624,17 @@ static int init_pm_wake_signal(void)
 
 late_initcall(init_pm_wake_signal);
 #endif
+
+/*
+ * Is the page under this physical-memory address reserved -- the kernel image
+ * or the brk heap after it, which the page allocator never hands out?
+ *
+ * Only meaningful for an address inside physical memory, and only once
+ * mem_map is set up: virt_to_page() of anything else is not a struct page.
+ */
+int reserved_address(void *addr)
+{
+	struct page *page = virt_to_page(addr);
+
+	return PageReserved(page);
+}
