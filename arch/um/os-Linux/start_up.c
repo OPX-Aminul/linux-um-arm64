@@ -435,6 +435,50 @@ static void __init check_sysemu(void)
 	      "intercept guest syscalls without one of them.\n");
 }
 
+int have_close_range = 1;
+
+/*
+ * Can close_range(2) be called without dying?
+ *
+ * Two different hosts answer no. One is simply older than 5.9 and returns
+ * -ENOSYS. The other is an Android kernel whose seccomp policy does not list
+ * the syscall, and there the caller is killed with SIGSYS -- there is no return
+ * value to inspect, which is why this cannot be a test of the result.
+ *
+ * A child pays for the answer, exactly as check_stub_cycles() does. Getting it
+ * wrong is expensive in a way that is hard to read: the stub calls this before
+ * it has a filter of its own, so a stub that dies here takes the guest with it
+ * and the log blames seccomp.
+ */
+static void __init check_close_range(void)
+{
+	int pid, n, status;
+
+	os_info("Checking close_range()...");
+
+	pid = fork();
+	if (pid == 0)
+		_exit(stub_syscall3(__NR_close_range, 1, ~0U, 0) == 0 ? 0 : 1);
+	if (pid < 0)
+		fatal_perror("check_close_range: fork failed");
+
+	CATCH_EINTR(n = waitpid(pid, &status, 0));
+	if (n < 0)
+		fatal_perror("check_close_range: wait failed");
+
+	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+		os_info("OK\n");
+		return;
+	}
+
+	have_close_range = 0;
+	if (WIFSIGNALED(status))
+		os_info("blocked by the host (signal %d); closing by hand\n",
+			WTERMSIG(status));
+	else
+		os_info("unavailable; closing by hand\n");
+}
+
 /*
  * Is the cycle counter the stub's adaptive spin is budgeted against readable?
  *
@@ -560,8 +604,15 @@ static int __init seccomp_helper(void *data)
 	};
 	struct sigaction sa;
 
-	/* close_range is needed for the stub */
-	if (stub_syscall3(__NR_close_range, 1, ~0U, 0))
+	/*
+	 * Rehearse the stub, which drops its descriptors with close_range(2)
+	 * only where check_close_range() -- already run by os_early_checks()
+	 * -- found that safe. Calling it unconditionally here is what used to
+	 * get this helper killed with SIGSYS on a host that filters the
+	 * syscall, reported as "seccomp cannot be installed": both wrong and
+	 * the hardest kind of wrong to trace.
+	 */
+	if (have_close_range && stub_syscall3(__NR_close_range, 1, ~0U, 0))
 		exit(1);
 
 	/*
@@ -965,6 +1016,7 @@ void __init os_early_checks(void)
 	 * Before either mode is chosen: the spin this gates belongs to SECCOMP
 	 * mode, and that path returns below without reaching check_ptrace().
 	 */
+	check_close_range();
 	check_stub_cycles();
 
 	if (seccomp_config) {

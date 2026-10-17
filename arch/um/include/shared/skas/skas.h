@@ -18,6 +18,7 @@ extern int using_seccomp;
 extern int have_ptrace_sysemu;
 extern int syscall_cancel_nr;
 extern int have_stub_cycles;
+extern int have_close_range;
 
 extern void new_thread_handler(void);
 extern void handle_syscall(struct uml_pt_regs *regs);

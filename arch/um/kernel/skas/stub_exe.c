@@ -75,8 +75,19 @@ noinline static void real_init(void)
 		stub_syscall1(__NR_exit, 12);
 
 	/* In SECCOMP mode, we only need the signalling FD from now on */
-	if (init_data.seccomp) {
+	if (init_data.seccomp && init_data.have_close_range) {
 		res = stub_syscall3(__NR_close_range, 1, ~0U, 0);
+		if (res != 0)
+			stub_syscall1(__NR_exit, 13);
+	} else if (init_data.seccomp) {
+		/*
+		 * Without close_range(2), userspace_tramp() has already made
+		 * every other descriptor close-on-exec, and the one it exempted
+		 * is the memory FD both mappings above came from (code and data
+		 * share it -- the code mapping would have failed otherwise). It
+		 * backs all of guest memory, so it must not outlive them.
+		 */
+		res = stub_syscall1(__NR_close, init_data.stub_data_fd);
 		if (res != 0)
 			stub_syscall1(__NR_exit, 13);
 	}

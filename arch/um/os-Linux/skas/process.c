@@ -15,6 +15,7 @@
 #include <mem_user.h>
 
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -367,6 +368,57 @@ struct tramp_data {
 #define CLOSE_RANGE_CLOEXEC	(1U << 2)
 #endif
 
+/*
+ * close_range(0, ~0U, CLOSE_RANGE_CLOEXEC), for a host that will not run it.
+ *
+ * Only the descriptors that are actually open, as /proc/self/fd lists them.
+ * Sweeping every number below RLIMIT_NOFILE would be paid again for every
+ * process the guest starts, and an Android app's limit is 32768; the sweep is
+ * kept only for a host with no /proc. getdents64 is called directly, into a
+ * small buffer, because this runs in a CLONE_VM child on a one-page stack,
+ * where neither opendir()'s allocation nor a large buffer is safe.
+ */
+static void cloexec_all_fds(void)
+{
+	struct {
+		unsigned long long d_ino;
+		long long d_off;
+		unsigned short d_reclen;
+		unsigned char d_type;
+		char d_name[];
+	} *d;
+	unsigned long long buf[32];
+	unsigned long fd, max = 4096;
+	struct rlimit lim;
+	long n, off;
+	int dir;
+
+	dir = open("/proc/self/fd", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+	if (dir >= 0) {
+		while ((n = syscall(__NR_getdents64, dir, buf, sizeof(buf))) > 0) {
+			for (off = 0; off < n; off += d->d_reclen) {
+				const char *p;
+
+				d = (void *)buf + off;
+				fd = 0;
+				for (p = d->d_name; *p >= '0' && *p <= '9'; p++)
+					fd = fd * 10 + (*p - '0');
+				/* skips "." and ".." */
+				if (p != d->d_name && !*p)
+					fcntl(fd, F_SETFD, FD_CLOEXEC);
+			}
+		}
+		close(dir);
+		if (n == 0)
+			return;
+	}
+
+	if (!getrlimit(RLIMIT_NOFILE, &lim) && lim.rlim_cur != RLIM_INFINITY)
+		max = lim.rlim_cur;
+	for (fd = 0; fd < max; fd++)
+		fcntl(fd, F_SETFD, FD_CLOEXEC);
+}
+
 static int userspace_tramp(void *data)
 {
 	struct tramp_data *tramp_data = data;
@@ -374,6 +426,7 @@ static int userspace_tramp(void *data)
 	unsigned long long offset;
 	struct stub_init_data init_data = {
 		.seccomp = using_seccomp,
+		.have_close_range = have_close_range,
 		.stub_start = STUB_START,
 	};
 	int ret;
@@ -405,7 +458,10 @@ static int userspace_tramp(void *data)
 	 * and then unsetting it on all memory related FDs.
 	 * This is not strictly necessary from a safety perspective.
 	 */
-	syscall(__NR_close_range, 0, ~0U, CLOSE_RANGE_CLOEXEC);
+	if (have_close_range)
+		syscall(__NR_close_range, 0, ~0U, CLOSE_RANGE_CLOEXEC);
+	else
+		cloexec_all_fds();
 
 	fcntl(init_data.stub_data_fd, F_SETFD, 0);
 

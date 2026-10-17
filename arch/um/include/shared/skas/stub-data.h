@@ -81,6 +81,17 @@ struct stub_spin_state {
 struct stub_init_data {
 	int seccomp;
 
+	/*
+	 * Whether close_range(2) may be called at all.
+	 *
+	 * Not "does this kernel have it": on a host whose seccomp policy does
+	 * not allow the syscall -- an Android app sandbox, for instance -- the
+	 * caller is killed with SIGSYS rather than given -ENOSYS, so the stub
+	 * cannot find out for itself without dying. check_close_range() asks
+	 * once, in a child, and the answer is carried here.
+	 */
+	int have_close_range;
+
 	unsigned long stub_start;
 
 	int stub_code_fd;
